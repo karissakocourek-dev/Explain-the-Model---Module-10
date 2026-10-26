@@ -1,6 +1,6 @@
 # Explain the Model
 
-**App:** _paste your public app link here_
+**App:** https://karissakocourek-dev.github.io/explain-the-model/
 
 | Section | Direct link | My viewer should walk away knowing… |
 |---|---|---|
