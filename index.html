@@ -82,6 +82,34 @@
     .trace { margin-top: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
     .trace summary { cursor: pointer; font-weight: 600; }
     button[data-goto] { margin: 4px 8px 4px 0; }
+    :root { --trail: #2f7d4f; --mtn-top: #c9b79c; --mtn-bottom: #efe7da; }
+    @media (prefers-color-scheme: dark) { :root { --trail: #5cc98a; --mtn-top: #6b5a45; --mtn-bottom: #2a241d; } }
+    .step-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .step-controls button { margin-top: 0; }
+    .step-controls .slider { flex: 1; margin: 0; }
+    .boost-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; margin-top: 12px; align-items: start; }
+    @media (max-width: 760px) { .boost-layout { grid-template-columns: 1fr; } }
+    .step-box { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+    .step-box p { margin: 8px 0 0; }
+    .step-big { font-size: 36px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .step-big span { font-size: 17px; font-weight: 600; }
+    .step-eq > div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dotted var(--line); }
+    .step-eq .step-total { border-top: 2px solid var(--fg); border-bottom: none; font-weight: 800; font-size: 18px; }
+    .step-v { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 700; }
+    .step-gap { font-size: 14px; color: var(--muted); }
+    .mini-log { font-size: 13px; margin-top: 10px; }
+    .mini-log tr.cur td { font-weight: 700; }
+    .mini-log th.num { text-align: right; }
+    .legend-list { list-style: none; padding: 0; margin: 8px 0; }
+    .legend-list li { margin: 4px 0; }
+    .key { display: inline-block; width: 26px; height: 0; vertical-align: middle; margin-right: 6px; }
+    .key-train { border-top: 3px dashed var(--muted); } .key-val { border-top: 3px solid var(--trail); }
+    .zoom button { margin: 4px 6px 8px 0; }
+    .zoom button.active { border-color: var(--fg); font-weight: 700; }
+    .verdict { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+    .v-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px; color: var(--muted); }
+    .v-nums > div > span { display: block; }
+    .v-big { font-size: 26px; font-weight: 800; color: var(--fg); font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>

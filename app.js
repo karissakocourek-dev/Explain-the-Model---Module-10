@@ -399,54 +399,209 @@ function drawSpread(b, person, trees) {
   </svg>`;
 }
 
-// ---- One Correction at a Time -----------------------------------------------
+// ---- One Correction at a Time: hiking down into the valley ---------------------
+// staged[m] = staged[m-1] + corrections[m-1]. Corrections already include the
+// learning rate, so they are used exactly as supplied.
 function renderBoosting(b, person) {
   const u = b.units;
   const gb = b.boosting;
   const p = gb.people[person.id];
-  const r = Number(state.round ?? 1);
+  const last = p.corrections.length;
+  const best = gb.best_validation_round;
+  const lr = gb.learning_rate;
+  const depth = gb.settings.max_depth;
+  const r = Math.min(last, Number(state.round ?? 0));
+  state.zoom = state.zoom ?? false;
+
   $("section").innerHTML = `
-    <h2>One Correction at a Time: how does each tree improve the model?</h2>
-    ${starterNote("a slider, three numbers and a plain error chart.")}
-    <p>${person.label} (${person.description}). Observed: ${fmt(person.observed)} ${u}.</p>
-    <label>Round: <input id="round" type="range" min="0" max="${p.corrections.length}" value="${r}"> <span id="round-value">${r}</span></label>
-    <div id="boosting-results"></div>
-    <p class="note">Each new tree is fitted to the training errors (residuals) left by the rounds before it.
-      The stopping round is chosen with validation data, so its error is not an independent test result.</p>`;
+    <h2>One Correction at a Time: hiking down to the lowest error</h2>
+    <p class="lead">Gradient boosting builds a prediction in <strong>small steps</strong>. It starts at the average
+      (round 0), then each round adds <strong>one small tree</strong> that corrects part of what the model still gets wrong.
+      Think of it as hiking down a mountain: every step lowers the error a little. The hard part is knowing
+      <strong>when to stop walking</strong>.</p>
+
+    <div class="panel">
+      <h3>1. Take the steps for ${person.label} (${person.description})</h3>
+      <div class="step-controls">
+        <button type="button" id="r-back">◀ 1 step</button>
+        <label class="slider">Round: <input id="round" type="range" min="0" max="${last}" value="${r}">
+          <strong id="round-value">${r}</strong> of ${last}</label>
+        <button type="button" id="r-next">1 step ▶</button>
+      </div>
+      <div class="boost-layout">
+        <div id="step-card"></div>
+        <div id="person-path"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>2. The trail map: where should the hike stop?</h3>
+      <p>This chart is the mountain. It shows the model's typical error after each round, as <strong>RMSE</strong>
+        (root mean squared error: roughly the typical size of a miss, in ${u}). Lower is better, so walking right means walking downhill.</p>
+      <ul class="legend-list">
+        <li><span class="key key-train"></span><strong>Practice trail (training error):</strong> error on the training people the trees learned from.
+          It keeps going down, because the model can keep memorizing them.</li>
+        <li><span class="key key-val"></span><strong>Real trail (validation error):</strong> error on ${num(b.n_validation, 0)} people the model never trained on.
+          It reaches a valley floor 🚩, then starts climbing back up.</li>
+      </ul>
+      <div class="zoom">
+        <button type="button" data-zoom="0">Whole trail (rounds 0–${last})</button>
+        <button type="button" data-zoom="1">Zoom in (rounds 0–${Math.max(100, Math.min(last, best * 3))})</button>
+      </div>
+      <div id="mountain"></div>
+      <div id="stop-verdict"></div>
+      <p class="note">Choosing the stopping round this way is a <strong>validation-based choice, not a test result</strong>. We used the
+        validation people to make the decision, so their error is no longer a fully independent check. A true test score would
+        need people who were never used for any choice.</p>
+    </div>
+
+    <div class="panel">
+      <h3>3. What happens inside one step?</h3>
+      <div class="two-cards">
+        <div class="card"><strong>Each new tree learns from the leftovers.</strong>
+          After every round, the model checks each <em>training</em> person: <em>residual = actual value − current prediction</em>.
+          That's what's still wrong. The next tree (at most ${depth} yes/no questions deep) is trained to predict those residuals,
+          so it focuses on whatever the earlier rounds missed.</div>
+        <div class="card"><strong>Only a small part of each tree is used.</strong>
+          The model takes just ${num(lr * 100, 0)}% of each tree's suggestion (the <em>learning rate</em> = ${lr}). Small, careful steps
+          usually generalize better than big jumps. The corrections on this page already include that ${num(lr * 100, 0)}%.</div>
+      </div>
+      <p class="callout">Not every step helps every person. A tree corrects the training people <em>as a group</em>, so for one person a step
+        can go the wrong way. Step through ${person.label}'s rounds and you'll see some steps move away from the measured value.
+        Judge the stopping point by the trail map, not by one person.</p>
+    </div>`;
+
   const update = (k) => {
+    state.round = k;
+    $("round").value = k;
     $("round-value").textContent = k;
-    $("boosting-results").innerHTML = `<table>
-      ${k === 0
-        ? `<tr><th>Round 0: average outcome in the training rows</th><th class="num">${fmt(gb.init)} ${u}</th></tr>`
-        : `<tr><td>Prediction after round ${k - 1}</td><td class="num">${fmt(p.staged[k - 1])} ${u}</td></tr>
-           <tr><td>Correction from tree ${k} (already scaled by the learning rate)</td><td class="num ${p.corrections[k - 1] >= 0 ? "up" : "down"}">${signed(p.corrections[k - 1], 2)} ${u}</td></tr>
-           <tr><th>Prediction after round ${k}</th><th class="num">${fmt(p.staged[k])} ${u}</th></tr>`}
-    </table>
-    ${rmseChart(gb, k, u)}
-    <p>If you stop at round ${k}: validation RMSE ${fmt(gb.rmse.validation[k])} ${u} (training ${fmt(gb.rmse.train[k])} ${u}).
-      Lowest validation RMSE: ${fmt(gb.best_validation_rmse)} ${u} at round ${gb.best_validation_round}.</p>`;
+    const gap = (v) => `${num(Math.abs(person.observed - v))} ${u} ${v > person.observed ? "too high" : "too low"}`;
+    if (k === 0) {
+      $("step-card").innerHTML = `<div class="step-box">
+        <div class="sb-label">ROUND 0: THE STARTING POINT</div>
+        <div class="step-big">${num(gb.init)} <span>${u}</span></div>
+        <p>Before any trees, the best single guess for everyone is the <strong>average outcome in the training data</strong>.
+          Every person starts here. Press <em>1 step ▶</em> to add the first tree.</p>
+        <p class="step-gap">Measured value: ${num(person.observed)} ${u} · still ${gap(gb.init)}</p></div>`;
+    } else {
+      const c = p.corrections[k - 1];
+      const before = Math.abs(person.observed - p.staged[k - 1]), after = Math.abs(person.observed - p.staged[k]);
+      $("step-card").innerHTML = `<div class="step-box">
+        <div class="sb-label">ROUND ${k}: ONE SMALL CORRECTION</div>
+        <div class="step-eq">
+          <div><span class="step-k">Prediction after round ${k - 1}</span><span class="step-v">${num(p.staged[k - 1])} ${u}</span></div>
+          <div><span class="step-k">Correction from tree ${k}</span><span class="step-v ${c >= 0 ? "up" : "down"}">${signedNum(c, 2)} ${u}</span></div>
+          <div class="step-total"><span class="step-k">Prediction after round ${k}</span><span class="step-v">${num(p.staged[k])} ${u}</span></div>
+        </div>
+        <p class="step-gap">Measured value: ${num(person.observed)} ${u} · now ${gap(p.staged[k])}
+          ${after > before + 1e-9 ? `<br><strong>This step moved ${person.label} slightly away from the measured value.</strong>` : ""}</p>
+        <table class="mini-log"><tr><th>Round</th><th class="num">Correction</th><th class="num">Prediction</th></tr>
+          ${Array.from({ length: Math.min(5, k + 1) }, (_, j) => k - Math.min(4, k) + j).map((m) => `<tr${m === k ? ' class="cur"' : ""}>
+            <td>${m}</td><td class="num">${m === 0 ? "start" : signedNum(p.corrections[m - 1], 2)}</td><td class="num">${num(p.staged[m])}</td></tr>`).join("")}
+        </table></div>`;
+    }
+    drawPersonPath(b, person, p.staged, k);
+    drawMountain(b, k);
+    const v = gb.rmse.validation, t = gb.rmse.train;
+    let verdict;
+    if (k < best) verdict = `<strong>Still heading downhill.</strong> The error on new people is still falling, so more steps should help.`;
+    else if (k === best) verdict = `<strong>🚩 You're on the valley floor.</strong> This is the round with the lowest error on new people. Stop here.`;
+    else verdict = `<strong>Past the valley floor.</strong> The practice trail is still going down (training ${num(t[best])} → ${num(t[k])} ${u}),
+      but the real trail is ${num(v[k] - v[best])} ${u} worse than at round ${best}. The extra trees are learning quirks of the training
+      people that new people don't share. That's <strong>overfitting</strong>.`;
+    $("stop-verdict").innerHTML = `<div class="verdict">
+      <div class="v-nums">
+        <div><span class="sb-label">IF YOU STOP AT ROUND ${k}</span><span class="v-big">${num(v[k])} ${u}</span>validation RMSE (training: ${num(t[k])} ${u})</div>
+        <div><span class="sb-label">LOWEST VALIDATION ERROR</span><span class="v-big">${num(gb.best_validation_rmse)} ${u}</span>at round ${best}</div>
+      </div>
+      <p>${verdict}</p>
+      <p class="note">Why not stop where the <em>training</em> error is lowest (round ${last})? Because training error always keeps
+        falling: it only says how well the model remembers people it has already seen. The validation trail is the honest guide.</p>
+      ${k !== best ? `<button type="button" id="go-best">🚩 Jump to the valley floor (round ${best})</button>` : ""}
+    </div>`;
+    if ($("go-best")) $("go-best").onclick = () => update(best);
   };
-  $("round").oninput = (e) => { state.round = Number(e.target.value); update(state.round); };
+
+  $("round").oninput = (e) => update(Number(e.target.value));
+  $("r-back").onclick = () => update(Math.max(0, state.round - 1));
+  $("r-next").onclick = () => update(Math.min(last, state.round + 1));
+  document.querySelectorAll("[data-zoom]").forEach((el) => {
+    el.classList.toggle("active", String(Number(state.zoom)) === el.dataset.zoom);
+    el.onclick = () => {
+      state.zoom = el.dataset.zoom === "1";
+      document.querySelectorAll("[data-zoom]").forEach((e2) => e2.classList.toggle("active", e2 === el));
+      drawMountain(b, state.round);
+    };
+  });
   update(r);
 }
 
-function rmseChart(gb, round, u) {
-  const W = 600, H = 220, pad = 40;
+// The mountain: training and validation RMSE by round, with the hiker and the flag.
+function drawMountain(b, k) {
+  const u = b.units;
+  const gb = b.boosting;
   const tr = gb.rmse.train, va = gb.rmse.validation;
-  const lo = Math.min(...tr, ...va), hi = Math.max(...tr, ...va);
-  const x = (i) => pad + (i / (tr.length - 1)) * (W - 2 * pad);
-  const y = (v) => H - pad - ((v - lo) / (hi - lo)) * (H - 2 * pad);
-  const line = (arr) => arr.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Training and validation RMSE by round">
-    <path d="${line(tr)}" fill="none" stroke="var(--muted)" stroke-width="2"/>
-    <path d="${line(va)}" fill="none" stroke="var(--accent)" stroke-width="2"/>
-    <line x1="${x(round)}" x2="${x(round)}" y1="${pad}" y2="${H - pad}" stroke="var(--fg)" stroke-dasharray="4 3"/>
-    <circle cx="${x(gb.best_validation_round)}" cy="${y(gb.best_validation_rmse)}" r="4" fill="var(--accent)"/>
-    <text x="${pad}" y="${H - 10}" fill="var(--muted)" font-size="12">Round (0 to ${tr.length - 1})</text>
-    <text x="4" y="${pad - 12}" fill="var(--muted)" font-size="12">RMSE (${u}): grey = training, blue = validation, dot = lowest validation</text>
-    <text x="${pad - 4}" y="${y(hi) + 4}" fill="var(--muted)" font-size="11" text-anchor="end">${hi.toFixed(0)}</text>
-    <text x="${pad - 4}" y="${y(lo) + 4}" fill="var(--muted)" font-size="11" text-anchor="end">${lo.toFixed(0)}</text>
+  const best = gb.best_validation_round;
+  const maxR = state.zoom ? Math.max(100, Math.min(tr.length - 1, best * 3)) : tr.length - 1;
+  const W = 720, H = 320, L = 62, R = 16, T = 20, B = 46;
+  const lo = Math.min(...tr.slice(0, maxR + 1), ...va.slice(0, maxR + 1));
+  const hi = Math.max(...tr.slice(0, maxR + 1), ...va.slice(0, maxR + 1));
+  const pad = (hi - lo) * 0.08;
+  const y0 = Math.max(0, lo - pad), y1 = hi + pad;
+  const x = (i) => L + (i / maxR) * (W - L - R);
+  const y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const line = (arr) => arr.slice(0, maxR + 1).map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  const area = `${line(va)} L${x(maxR)},${H - B} L${x(0)},${H - B} Z`;
+  const ticksX = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * maxR));
+  const ticksY = [0, 0.5, 1].map((f) => y0 + f * (y1 - y0));
+  const kk = Math.min(k, maxR);
+  const hikerVisible = k <= maxR;
+  $("mountain").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Training and validation RMSE by boosting round">
+    <defs><linearGradient id="earth" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="var(--mtn-top)"/><stop offset="1" stop-color="var(--mtn-bottom)"/></linearGradient></defs>
+    <path d="${area}" fill="url(#earth)"/>
+    ${ticksY.map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="2 4"/>
+      <text x="${L - 6}" y="${y(v) + 4}" font-size="11" fill="var(--muted)" text-anchor="end">${num(v, 1)}</text>`).join("")}
+    ${ticksX.map((i) => `<text x="${x(i)}" y="${H - B + 16}" font-size="11" fill="var(--muted)" text-anchor="middle">${i}</text>`).join("")}
+    <path d="${line(tr)}" fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-dasharray="6 4"/>
+    <path d="${line(va)}" fill="none" stroke="var(--trail)" stroke-width="3"/>
+    ${best <= maxR ? `<line x1="${x(best)}" x2="${x(best)}" y1="${y(va[best])}" y2="${y(va[best]) - 34}" stroke="var(--fg)" stroke-width="1.5"/>
+      <text x="${x(best) + 1}" y="${y(va[best]) - 22}" font-size="18">🚩</text>
+      <text x="${x(best) + 8}" y="${y(va[best]) + 18}" font-size="11" fill="var(--fg)">lowest: ${num(gb.best_validation_rmse)} ${u}, round ${best}</text>` : ""}
+    ${hikerVisible ? `<line x1="${x(kk)}" x2="${x(kk)}" y1="${T}" y2="${H - B}" stroke="var(--fg)" stroke-opacity=".35"/>
+      <circle cx="${x(kk)}" cy="${y(tr[kk])}" r="4" fill="var(--muted)"/>
+      <text x="${x(kk)}" y="${y(va[kk]) - 6}" font-size="22" text-anchor="middle">🥾</text>
+      <circle cx="${x(kk)}" cy="${y(va[kk])}" r="5" fill="var(--trail)" stroke="var(--bg)" stroke-width="2"/>`
+      : `<text x="${W - R}" y="${T + 12}" font-size="11" fill="var(--muted)" text-anchor="end">hiker is at round ${k}, past the zoomed view →</text>`}
+    <text x="${(L + W - R) / 2}" y="${H - 8}" font-size="12" fill="var(--muted)" text-anchor="middle">Boosting round (number of trees added)</text>
+    <text transform="translate(14 ${(T + H - B) / 2}) rotate(-90)" font-size="12" fill="var(--muted)" text-anchor="middle">RMSE: typical error (${u})</text>
   </svg>`;
+}
+
+// One person's prediction, round by round, against the measured value.
+function drawPersonPath(b, person, staged, k) {
+  const u = b.units;
+  const W = 360, H = 200, L = 56, R = 10, T = 24, B = 34;
+  const vals = [...staged, person.observed];
+  const lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.08 || 1;
+  const y0 = lo - pad, y1 = hi + pad;
+  const x = (i) => L + (i / (staged.length - 1)) * (W - L - R);
+  const y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const path = staged.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  $("person-path").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="This person's prediction by round">
+    <text x="${L}" y="12" font-size="11" fill="var(--muted)">${person.label}'s prediction by round (${u})</text>
+    <line x1="${L}" x2="${W - R}" y1="${y(person.observed)}" y2="${y(person.observed)}" stroke="var(--fg)" stroke-dasharray="4 3"/>
+    <text x="${W - R}" y="${y(person.observed) - 4}" font-size="10" fill="var(--fg)" text-anchor="end">measured ${num(person.observed)}</text>
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+    <circle cx="${x(k)}" cy="${y(staged[k])}" r="5" fill="var(--accent)" stroke="var(--bg)" stroke-width="2"/>
+    <text x="${L - 4}" y="${y(hi) + 4}" font-size="10" fill="var(--muted)" text-anchor="end">${num(hi, 0)}</text>
+    <text x="${L - 4}" y="${y(lo) + 4}" font-size="10" fill="var(--muted)" text-anchor="end">${num(lo, 0)}</text>
+    <text x="${L}" y="${H - B + 14}" font-size="10" fill="var(--muted)">0</text>
+    <text x="${W - R}" y="${H - B + 14}" font-size="10" fill="var(--muted)" text-anchor="end">${staged.length - 1}</text>
+    <text x="${(L + W - R) / 2}" y="${H - 6}" font-size="11" fill="var(--muted)" text-anchor="middle">round</text>
+  </svg>
+  <p class="note">The blue line is this person's prediction after each round. Early steps make visible moves; later
+    steps are tiny tweaks.</p>`;
 }
 
 setup();
