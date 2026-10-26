@@ -167,7 +167,7 @@ function updateLinear(b, person) {
       : name === biggestDown ? `<span class="tag down-bg">biggest push down</span>` : "";
     return `<div class="r-line">
       <div class="r-item">${title} ${tag}<div class="r-detail">${detail}</div></div>
-      <div class="r-amt ${v >= 0 ? "up" : "down"}">${v >= 0 ? "▲" : "▼"} ${signedNum(v)}</div>
+      <div class="r-amt ${v >= 0 ? "up" : "down"}">${v >= 0 ? "▲" : "▼"} ${signedNum(v)} ${u}</div>
     </div>`;
   });
 
@@ -187,7 +187,7 @@ function updateLinear(b, person) {
       <div class="r-line r-start">
         <div class="r-item">STARTING POINT<div class="r-detail">The prediction for a perfectly average training person
           (every feature at its training average). Not the intercept: the intercept is the prediction when every feature is 0, e.g. age 0 and BMI 0.</div></div>
-        <div class="r-amt">${num(ex.baseline)}</div>
+        <div class="r-amt">${num(ex.baseline)} ${u}</div>
       </div>
       <div class="r-sub">+ one push per feature (${u})</div>
       ${lines.join("")}
