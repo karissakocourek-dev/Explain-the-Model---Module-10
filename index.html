@@ -54,6 +54,34 @@
     .t-bar { background: var(--card); height: 14px; border-radius: 3px; overflow: hidden; }
     .t-bar span { display: block; height: 100%; }
     .t-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+    .slider { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0 12px; font-size: 17px; }
+    .slider input[type=range] { flex: 1; min-width: 160px; padding: 0; }
+    .forest-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(240px, 2fr); gap: 20px; align-items: start; }
+    @media (max-width: 760px) { .forest-layout { grid-template-columns: 1fr; } }
+    .judges { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+    @media (max-width: 520px) { .judges { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+    .judge { --tint: 0%; border: 1px solid var(--line); border-radius: 6px; padding: 3px 2px; text-align: center; background: var(--card);
+      transition: opacity .15s, filter .15s; font-variant-numeric: tabular-nums; }
+    .judge.hi { background: color-mix(in srgb, var(--up) var(--tint), var(--card)); }
+    .judge.lo { background: color-mix(in srgb, var(--down) var(--tint), var(--card)); }
+    .judge.off { opacity: .22; filter: grayscale(1); }
+    .j-tree { display: block; font-size: 10px; color: var(--muted); }
+    .j-score { display: block; font-size: 13px; font-weight: 700; }
+    .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; }
+    .swatch.hi { background: var(--up); } .swatch.lo { background: var(--down); }
+    .scoreboard { background: var(--fg); color: var(--bg); border-radius: 10px; padding: 14px 16px; }
+    .scoreboard table { margin: 8px 0 0; font-size: 14px; }
+    .scoreboard .num { white-space: nowrap; padding-left: 8px; }
+    .scoreboard td, .scoreboard th { border-color: color-mix(in srgb, var(--bg) 25%, transparent); padding: 4px 0; }
+    .sb-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; opacity: .8; }
+    .sb-score { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; margin: 4px 0; }
+    .sb-score span { font-size: 18px; font-weight: 600; }
+    .sb-math { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; opacity: .85; }
+    #settle { margin-top: 12px; }
+    .roots { margin: 4px 0 0; padding-left: 22px; font-size: 14px; }
+    .trace { margin-top: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+    .trace summary { cursor: pointer; font-weight: 600; }
+    button[data-goto] { margin: 4px 8px 4px 0; }
   </style>
 </head>
 <body>

@@ -43,8 +43,11 @@ const featureLabel = (b, name) => (b.features.find((f) => f.name === name) || { 
 
 // ---- Push & Pull: the receipt -------------------------------------------------
 // Every number comes from the bundle or m10.linearExplain. Nothing is re-estimated.
-const num = (v, d = 1) =>
-  Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+// Round like check.md (toFixed), then add thousands separators.
+const num = (v, d = 1) => {
+  const [i, f] = Number(v).toFixed(d).split(".");
+  return i.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (f ? "." + f : "");
+};
 const signedNum = (v, d = 1) => (v >= 0 ? "+" : "−") + num(Math.abs(v), d);
 const coefNum = (v) => {
   const a = Math.abs(v);
@@ -222,34 +225,178 @@ function renderTypical(b) {
     a category has no "standard deviation", so it can't go on this scale.</p>`;
 }
 
-// ---- Wisdom of the Forest ----------------------------------------------------
-// The slider is drawn once; only the results below it redraw, so dragging works.
+// ---- Wisdom of the Forest: a panel of judges ----------------------------------
+// Every number comes from bundle.forest. The slider is drawn once; only the
+// cards and the scoreboard redraw, so dragging works.
+function forestFeatureQuestion(b, step) {
+  const f = b.features.find((ff) => ff.name === step.feature) || { label: step.feature, units: "", binary: false };
+  if (f.binary) {
+    const short = f.label.replace(/ \(.*\)$/, "").replace(/^Race\/ethnicity: /, "");
+    return { q: `Is the person ${short}?`, a: step.goes === ">" ? "yes" : "no" };
+  }
+  const short = f.label.replace(/ \(.*\)$/, "");
+  const th = f.units === "years" ? num(step.threshold, 1) : num(step.threshold, 2);
+  return { q: `Is ${short} ≤ ${th} ${f.units}?`, a: step.goes === "≤" ? "yes" : "no" };
+}
+
 function renderForest(b, person) {
   const u = b.units;
   const rf = b.forest;
-  const trees = rf.people[person.id].tree_predictions;
-  const n = Number(state.nTrees || 10);
+  const nT = rf.n_trees;
+  const pf = rf.people[person.id];
+  const trees = pf.tree_predictions;
+  const d = state.key === "fev1" ? 0 : 1; // decimals on the small cards
+  const n = Math.min(nT, Number(state.nTrees || 10));
+  const lo = Math.min(...trees), hi = Math.max(...trees);
+  const avgUnique = rf.bootstrap_unique_training_rows.reduce((a, c) => a + c, 0) / rf.bootstrap_unique_training_rows.length;
+  const pctSeen = Math.round((100 * avgUnique) / rf.n_training_rows);
+  const outside = person.observed < lo || person.observed > hi;
+
   $("section").innerHTML = `
-    <h2>Wisdom of the Forest: how do ${rf.n_trees} trees combine?</h2>
-    ${starterNote("a list of tree guesses and their average.")}
-    <p>${person.label} (${person.description}). Observed: ${fmt(person.observed)} ${u}.</p>
-    <p>First 10 trees' guesses: ${trees.slice(0, 10).map((t) => fmt(t)).join(", ")} ${u}</p>
-    <label>Trees included: <input id="ntrees" type="range" min="1" max="${rf.n_trees}" value="${n}"> <span id="ntrees-value">${n}</span></label>
-    <div id="forest-results"></div>
-    <p class="note">Trees differ because each one learns from a different bootstrap sample (about
-      ${Math.round((100 * rf.bootstrap_unique_training_rows.reduce((a, c) => a + c, 0)) / rf.bootstrap_unique_training_rows.length / rf.n_training_rows)}%
-      of the training people, some repeated) and tries only ${rf.features_tried_per_split} of ${rf.n_features} features at each split.
-      The spread is disagreement between trees, not a confidence interval.</p>`;
+    <h2>Wisdom of the Forest: how ${nT} trees combine into one prediction</h2>
+    <p class="lead">A random forest is like a <strong>panel of ${nT} judges</strong>. Each judge is a decision tree: a chain of
+      yes/no questions about the person that ends in a guess. Every judge looks at the <em>same</em> person, but each one
+      gives its own score. The forest's prediction is simply the <strong>average of all ${nT} scores</strong>.</p>
+
+    <div class="panel">
+      <h3>1. The judges score ${person.label} (${person.description})</h3>
+      <label class="slider">Judges seated: <input id="ntrees" type="range" min="1" max="${nT}" value="${n}">
+        <strong id="ntrees-value">${n}</strong> of ${nT}</label>
+      <div class="forest-layout">
+        <div>
+          <div class="judges" id="judges">
+            ${trees.map((t, i) => `<div class="judge" data-i="${i}" title="Tree ${i + 1}: ${num(t)} ${u}">
+              <span class="j-tree">🌳 ${i + 1}</span><span class="j-score">${num(t, d)}</span></div>`).join("")}
+          </div>
+          <p class="note">Each card is one tree's guess in ${u}. Color shows how far a judge is from the whole forest's average:
+            <span class="swatch hi"></span> higher, <span class="swatch lo"></span> lower. Greyed-out cards aren't seated yet.</p>
+        </div>
+        <div>
+          <div class="scoreboard" id="scoreboard"></div>
+          <div id="settle"></div>
+        </div>
+      </div>
+      <p class="callout">Why is the average steadier than one judge? Each judge has its own quirks that push its guess too high
+        or too low. With many judges, those quirks point in different directions and partly cancel out. Slide the judges in
+        one at a time and watch: the panel score jumps around at first, then settles. Steadier doesn't guarantee it's right,
+        though. Compare it with the measured value.</p>
+    </div>
+
+    <div class="panel">
+      <h3>2. Why don't the judges agree?</h3>
+      <p>All ${nT} trees use the same method, but each one is trained in a deliberately different way:</p>
+      <div class="two-cards">
+        <div class="card"><strong>Each judge studied a different group of people.</strong>
+          Each tree learned from its own random sample of the ${num(rf.n_training_rows, 0)} training people, drawn with repeats
+          (a <em>bootstrap sample</em>). On average a tree saw about ${num(avgUnique, 0)} different people (${pctSeen}%), some more than once,
+          and never saw the rest. Tree 1 saw ${num(rf.bootstrap_unique_training_rows[0], 0)}; tree 2 saw ${num(rf.bootstrap_unique_training_rows[1], 0)}.</div>
+        <div class="card"><strong>Each question could only use a few features.</strong>
+          Every time a tree picks its next yes/no question, it may only choose from ${rf.features_tried_per_split} randomly picked
+          features out of ${rf.n_features}. So different judges end up asking different questions.
+          <div class="r-detail" style="margin-top:6px">First question of each of the first 5 trees:</div>
+          <ol class="roots">${rf.root_split.slice(0, 5).map((s) => `<li>${forestFeatureQuestion(b, { ...s, goes: "≤" }).q}</li>`).join("")}</ol></div>
+      </div>
+      <details class="trace"><summary>Follow judge 1's questions for ${person.label}</summary>
+        <ol>${pf.traced_trees[0].steps.map((s) => { const x = forestFeatureQuestion(b, s); return `<li>${x.q} <strong>${x.a}</strong></li>`; }).join("")}</ol>
+        <p>Judge 1's answer: <strong>${num(pf.traced_trees[0].leaf_value)} ${u}</strong>, the average outcome of the training people
+          who ended up at the same final answer. The other 99 judges each follow their own questions.</p>
+      </details>
+    </div>
+
+    <div class="panel">
+      <h3>3. Disagreement is not a confidence interval</h3>
+      <div id="spread"></div>
+      <p>For ${person.label}, the judges' guesses run from <strong>${num(lo)}</strong> to <strong>${num(hi)} ${u}</strong>.
+        That spread is <strong>disagreement between trees</strong>: how differently the judges see this person. It is
+        <strong>not</strong> a confidence interval or a prediction interval, and it doesn't promise the true value is inside it.
+        The judges learned from overlapping groups of the same people, so they share blind spots and can agree with each other
+        and still all be wrong.
+        ${outside ? `<strong>Here, the measured value (${num(person.observed)} ${u}) is outside every judge's guess.</strong>` : ""}</p>
+      <p>Compare: <button type="button" data-goto="P4">Example person 4: judges disagree most</button>
+        <button type="button" data-goto="P5">Example person 5: judges agree most</button></p>
+    </div>`;
+
+  drawSpread(b, person, trees);
   const update = (k) => {
     $("ntrees-value").textContent = k;
-    $("forest-results").innerHTML = `<table>
-      <tr><td>${k < rf.n_trees ? `Partial forest: average of the first ${k} of ${rf.n_trees} trees` : `Whole forest: average of all ${rf.n_trees} trees`}</td><td class="num">${fmt(m10.runningAverage(trees, k))} ${u}</td></tr>
-      <tr><th>Forest prediction (all ${rf.n_trees} trees)</th><th class="num">${fmt(rf.people[person.id].prediction)} ${u}</th></tr>
-      <tr><td>Tree disagreement for this person (lowest to highest guess)</td><td class="num">${fmt(Math.min(...trees))} to ${fmt(Math.max(...trees))} ${u}</td></tr>
-    </table>`;
+    document.querySelectorAll("#judges .judge").forEach((el) => {
+      const i = Number(el.dataset.i);
+      el.classList.toggle("off", i >= k);
+      const dev = (trees[i] - pf.prediction) / Math.max(hi - pf.prediction, pf.prediction - lo, 1e-9);
+      el.style.setProperty("--tint", `${Math.round(Math.min(1, Math.abs(dev)) * 55)}%`);
+      el.classList.toggle("hi", dev > 0);
+      el.classList.toggle("lo", dev < 0);
+    });
+    const avg = m10.runningAverage(trees, k);
+    const shown = trees.slice(0, Math.min(k, 3)).map((t) => num(t)).join(" + ");
+    $("scoreboard").innerHTML = `
+      <div class="sb-label">${k < nT ? `PARTIAL FOREST: ${k} of ${nT} judges` : `WHOLE FOREST: all ${nT} judges`}</div>
+      <div class="sb-score">${num(avg)} <span>${u}</span></div>
+      <div class="sb-math">(${shown}${k > 3 ? " + …" : ""}) ÷ ${k}</div>
+      <table>
+        <tr><td>Judge 1 alone</td><td class="num">${num(trees[0])} ${u}</td></tr>
+        <tr><th>Forest prediction (average of all ${nT})</th><th class="num">${num(pf.prediction)} ${u}</th></tr>
+        <tr><td>Measured value</td><td class="num">${num(person.observed)} ${u}</td></tr>
+      </table>`;
+    drawSettle(b, trees, k, pf.prediction);
   };
   $("ntrees").oninput = (e) => { state.nTrees = Number(e.target.value); update(state.nTrees); };
+  document.querySelectorAll("[data-goto]").forEach((el) => (el.onclick = () => {
+    state.person = el.dataset.goto; $("person").value = state.person; state.values = null; render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }));
   update(n);
+}
+
+// Small chart: the panel score as judges join, one at a time.
+function drawSettle(b, trees, k, finalAvg) {
+  const u = b.units;
+  const run = trees.map((_, i) => m10.runningAverage(trees, i + 1));
+  const W = 360, H = 170, L = 52, R = 10, T = 22, B = 34;
+  const lo = Math.min(...run), hi = Math.max(...run), span = hi - lo || 1;
+  const x = (i) => L + (i / (run.length - 1)) * (W - L - R);
+  const y = (v) => T + (1 - (v - lo) / span) * (H - T - B);
+  const path = run.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  $("settle").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Panel score as judges are added">
+    <text x="${L}" y="12" font-size="11" fill="var(--muted)">Panel score as judges join (${u})</text>
+    <line x1="${L}" x2="${W - R}" y1="${y(finalAvg)}" y2="${y(finalAvg)}" stroke="var(--muted)" stroke-dasharray="3 3"/>
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+    <line x1="${x(k - 1)}" x2="${x(k - 1)}" y1="${T}" y2="${H - B}" stroke="var(--fg)" stroke-width="1"/>
+    <circle cx="${x(k - 1)}" cy="${y(run[k - 1])}" r="4" fill="var(--fg)"/>
+    <text x="${L - 4}" y="${y(hi) + 4}" font-size="10" fill="var(--muted)" text-anchor="end">${num(hi, 0)}</text>
+    <text x="${L - 4}" y="${y(lo) + 4}" font-size="10" fill="var(--muted)" text-anchor="end">${num(lo, 0)}</text>
+    <text x="${L}" y="${H - B + 14}" font-size="10" fill="var(--muted)">1</text>
+    <text x="${W - R}" y="${H - B + 14}" font-size="10" fill="var(--muted)" text-anchor="end">${run.length}</text>
+    <text x="${(L + W - R) / 2}" y="${H - 6}" font-size="11" fill="var(--muted)" text-anchor="middle">number of judges seated</text>
+  </svg>`;
+}
+
+// Dot plot: every judge's guess on one number line, with the forest average and the measured value.
+function drawSpread(b, person, trees) {
+  const u = b.units;
+  const pred = b.forest.people[person.id].prediction;
+  const vals = [...trees, person.observed];
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const W = 640, L = 20, R = 20, bins = 48, r = 4;
+  const binOf = (v) => Math.min(bins - 1, Math.floor(((v - lo) / span) * bins));
+  const counts = new Array(bins).fill(0);
+  const dots = trees.map((t) => { const bi = binOf(t); return { bi, level: counts[bi]++ }; });
+  const maxStack = Math.max(...counts);
+  const base = 30 + maxStack * (2 * r + 1);
+  const H = base + 50;
+  const x = (v) => L + ((v - lo) / span) * (W - L - R);
+  const bx = (bi) => L + ((bi + 0.5) / bins) * (W - L - R);
+  $("spread").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="All tree guesses on one number line">
+    ${dots.map((dd) => `<circle cx="${bx(dd.bi).toFixed(1)}" cy="${base - r - dd.level * (2 * r + 1)}" r="${r}" fill="var(--muted)" opacity=".75"/>`).join("")}
+    <line x1="${L}" x2="${W - R}" y1="${base + 2}" y2="${base + 2}" stroke="var(--line)"/>
+    <line x1="${x(pred)}" x2="${x(pred)}" y1="16" y2="${base + 8}" stroke="var(--accent)" stroke-width="3"/>
+    <text x="${x(pred)}" y="12" font-size="12" fill="var(--accent)" text-anchor="middle" font-weight="700">forest average ${num(pred)}</text>
+    <line x1="${x(person.observed)}" x2="${x(person.observed)}" y1="16" y2="${base + 8}" stroke="var(--fg)" stroke-dasharray="4 3" stroke-width="2"/>
+    <text x="${x(person.observed)}" y="${base + 22}" font-size="12" fill="var(--fg)" text-anchor="middle">measured ${num(person.observed)}</text>
+    <text x="${L}" y="${H - 6}" font-size="11" fill="var(--muted)">${num(lo)} ${u}</text>
+    <text x="${W - R}" y="${H - 6}" font-size="11" fill="var(--muted)" text-anchor="end">${num(hi)} ${u}</text>
+    <text x="${W / 2}" y="${H - 6}" font-size="11" fill="var(--muted)" text-anchor="middle">each grey dot = one judge's guess (${u})</text>
+  </svg>`;
 }
 
 // ---- One Correction at a Time -----------------------------------------------
