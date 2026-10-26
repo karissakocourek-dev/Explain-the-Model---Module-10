@@ -4,17 +4,42 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Explain the Model</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;700;800&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --bg: #ffffff; --fg: #1d1d1f; --muted: #6b6b70; --line: #d9d9de; --accent: #2f6fde; --up: #c2410c; --down: #1d6fb8; --card: #f6f6f8; --paper: #fffdf6; }
+    /* Trail-guide theme: forest greens, earth browns, lake blue, rust. */
+    :root { --bg: #f7f3ea; --fg: #23261f; --muted: #66685c; --line: #d8d0bf; --accent: #2f6b45; --up: #b4532a; --down: #2b6a9a;
+      --card: #efe8da; --paper: #fffcf3; --sign: #6b4a2b; --sign-fg: #fbf3e2; --sky: #dde9e4; --mtn1: #9fb8a4; --mtn2: #5f8a6b; --mtn3: #2f5a3f;
+      --heading: "Bitter", Georgia, serif; }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #151517; --fg: #ececef; --muted: #a0a0a8; --line: #36363c; --accent: #7aa7ff; --up: #fb923c; --down: #60a5fa; --card: #1f1f23; --paper: #1c1b18; }
+      :root { --bg: #161a16; --fg: #ebe9e0; --muted: #a8a99c; --line: #353b33; --accent: #7cc49a; --up: #e9875c; --down: #6fb2e3;
+        --card: #20261f; --paper: #1d201b; --sign: #7a5634; --sign-fg: #fbf3e2; --sky: #1b2621; --mtn1: #2c3d33; --mtn2: #24382b; --mtn3: #1a2b20; }
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+    input[type=range] { accent-color: var(--accent); }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 "Source Sans 3", system-ui, sans-serif; }
+    h1, h2, h3 { font-family: var(--heading); }
+    h2 { font-size: 26px; line-height: 1.25; margin: 28px 0 12px; }
+    .banner { background: var(--sky); position: relative; overflow: hidden; }
+    .banner-inner { max-width: 900px; margin: 0 auto; padding: 28px 16px 92px; position: relative; z-index: 1; }
+    .banner h1 { margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -.01em; }
+    .banner .tagline { margin: 4px 0 0; color: var(--muted); font-size: 17px; }
+    .banner svg.ridge { position: absolute; left: 0; bottom: 0; width: 100%; height: 110px; display: block; }
+    .trailhead { max-width: 900px; margin: 0 auto; padding: 0 16px; position: relative; z-index: 2; }
+    nav { display: flex; flex-wrap: wrap; gap: 10px; margin-top: -54px; }
+    nav a { display: inline-flex; flex-direction: column; background: var(--sign); color: var(--sign-fg); text-decoration: none;
+      padding: 8px 30px 8px 14px; border-radius: 4px; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%);
+      font-family: var(--heading); font-weight: 700; line-height: 1.2; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); opacity: .82; }
+    nav a small { font-family: "Source Sans 3", system-ui, sans-serif; font-weight: 600; font-size: 12px; opacity: .85; letter-spacing: .03em; }
+    nav a:hover { opacity: 1; }
+    nav a.active { opacity: 1; background: var(--accent); color: #fff; }
+    @media (prefers-color-scheme: dark) { nav a.active { color: #10180f; } }
     header, main { max-width: 900px; margin: 0 auto; padding: 16px; }
-    nav a { margin-right: 16px; color: var(--accent); text-decoration: none; }
-    nav a.active { font-weight: 700; text-decoration: underline; }
-    .controls { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+    header.banner { max-width: none; padding: 0; }
+    .controls { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0 0; padding: 12px 14px; background: var(--card);
+      border: 1px solid var(--line); border-radius: 8px; align-items: center; }
+    .controls .ctl-title { font-family: var(--heading); font-weight: 700; margin-right: 4px; }
     select, input { font: inherit; padding: 4px 6px; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; }
     table { border-collapse: collapse; width: 100%; margin: 12px 0; }
     td, th { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; }
@@ -113,18 +138,29 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>Explain the Model</h1>
-    <nav>
-      <a href="#linear">Push &amp; Pull</a>
-      <a href="#forest">Wisdom of the Forest</a>
-      <a href="#boosting">One Correction at a Time</a>
+  <header class="banner">
+    <div class="banner-inner">
+      <h1>Explain the Model</h1>
+      <p class="tagline">A trail guide to how three regression models turn a person's health data into a prediction</p>
+    </div>
+    <svg class="ridge" viewBox="0 0 1200 110" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 70 L120 30 L230 62 L360 18 L470 58 L600 26 L720 64 L850 22 L980 60 L1090 34 L1200 56 L1200 110 L0 110 Z" fill="var(--mtn1)"/>
+      <path d="M0 88 L150 52 L280 84 L420 46 L560 86 L700 50 L830 88 L960 54 L1100 86 L1200 66 L1200 110 L0 110 Z" fill="var(--mtn2)"/>
+      <path d="M0 110 L0 98 L200 80 L380 100 L560 84 L760 102 L940 86 L1200 100 L1200 110 Z" fill="var(--mtn3)"/>
+    </svg>
+  </header>
+  <div class="trailhead">
+    <nav aria-label="Sections">
+      <a href="#linear"><small>TRAIL 1 · LINEAR REGRESSION</small>Push &amp; Pull</a>
+      <a href="#forest"><small>TRAIL 2 · RANDOM FOREST</small>Wisdom of the Forest</a>
+      <a href="#boosting"><small>TRAIL 3 · GRADIENT BOOSTING</small>One Correction at a Time</a>
     </nav>
     <div class="controls">
+      <span class="ctl-title">🥾 Trailhead:</span>
       <label>Dataset <select id="dataset"></select></label>
       <label>Example person <select id="person"></select></label>
     </div>
-  </header>
+  </div>
   <main id="section"></main>
   <script type="module" src="app.js"></script>
 </body>

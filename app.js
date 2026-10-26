@@ -600,7 +600,7 @@ function drawPersonPath(b, person, staged, k) {
     <text x="${W - R}" y="${H - B + 14}" font-size="10" fill="var(--muted)" text-anchor="end">${staged.length - 1}</text>
     <text x="${(L + W - R) / 2}" y="${H - 6}" font-size="11" fill="var(--muted)" text-anchor="middle">round</text>
   </svg>
-  <p class="note">The blue line is this person's prediction after each round. Early steps make visible moves; later
+  <p class="note">The green line is this person's prediction after each round. Early steps make visible moves; later
     steps are tiny tweaks.</p>`;
 }
 
