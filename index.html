@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Explain the Model</title>
   <style>
-    :root { --bg: #ffffff; --fg: #1d1d1f; --muted: #6b6b70; --line: #d9d9de; --accent: #2f6fde; --up: #c2410c; --down: #1d6fb8; --card: #f6f6f8; }
+    :root { --bg: #ffffff; --fg: #1d1d1f; --muted: #6b6b70; --line: #d9d9de; --accent: #2f6fde; --up: #c2410c; --down: #1d6fb8; --card: #f6f6f8; --paper: #fffdf6; }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #151517; --fg: #ececef; --muted: #a0a0a8; --line: #36363c; --accent: #7aa7ff; --up: #fb923c; --down: #60a5fa; --card: #1f1f23; }
+      :root { --bg: #151517; --fg: #ececef; --muted: #a0a0a8; --line: #36363c; --accent: #7aa7ff; --up: #fb923c; --down: #60a5fa; --card: #1f1f23; --paper: #1c1b18; }
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
@@ -25,6 +25,35 @@
     .inputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
     .inputs label { display: flex; flex-direction: column; font-size: 14px; }
     svg { width: 100%; height: auto; }
+    button { font: inherit; padding: 6px 12px; margin-top: 12px; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+    h3 { margin: 0 0 8px; font-size: 17px; }
+    .lead { font-size: 17px; }
+    .panel { margin: 24px 0; }
+    .linear-grid { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 2fr); gap: 24px; margin: 24px 0; }
+    @media (max-width: 700px) { .linear-grid { grid-template-columns: 1fr; } }
+    .inputs.one-col { grid-template-columns: 1fr; }
+    .receipt { background: var(--paper); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 16px 18px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .r-head { text-align: center; font-weight: 700; letter-spacing: .04em; padding-bottom: 10px; border-bottom: 2px dashed var(--line); }
+    .r-line { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dotted var(--line); }
+    .r-item { flex: 1; }
+    .r-amt { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+    .r-detail { font-family: system-ui, sans-serif; font-size: 12.5px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+    .r-start { font-weight: 700; }
+    .r-sub { color: var(--muted); padding: 8px 0 0; font-size: 13px; }
+    .r-total { border-top: 2px dashed var(--line); border-bottom: none; font-size: 17px; font-weight: 700; margin-top: 4px; }
+    .r-sum { font-size: 13px; padding-top: 8px; border-top: 1px dotted var(--line); overflow-wrap: anywhere; }
+    .tag { font-family: system-ui, sans-serif; font-size: 11px; font-weight: 700; color: #fff; padding: 1px 6px; border-radius: 10px; margin-left: 4px; white-space: nowrap; }
+    .up-bg { background: var(--up); } .down-bg { background: var(--down); }
+    .two-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 700px) { .two-cards { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 15px; }
+    .card > strong:first-child { display: block; margin-bottom: 4px; }
+    .callout { background: var(--card); border-left: 4px solid var(--accent); padding: 10px 12px; border-radius: 4px; }
+    .t-row { display: grid; grid-template-columns: minmax(140px, 2fr) 3fr minmax(90px, auto); gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .t-bar { background: var(--card); height: 14px; border-radius: 3px; overflow: hidden; }
+    .t-bar span { display: block; height: 100%; }
+    .t-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
   </style>
 </head>
 <body>
