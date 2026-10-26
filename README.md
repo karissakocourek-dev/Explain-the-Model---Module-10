@@ -1,6 +1,6 @@
 # Explain the Model
 
-**App:** [https://karissakocourek-dev.github.io/explain-the-model/](https://karissakocourek-dev.github.io/Explain-the-Model---Module-10/)
+**App:** https://karissakocourek-dev.github.io/Explain-the-Model---Module-10/
 
 | Section | Direct link | My viewer should walk away knowing… |
 |---|---|---|
